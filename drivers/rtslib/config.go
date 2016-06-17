@@ -241,9 +241,8 @@ func (c *Config) AddBlockStore(dev, name string) error {
 }
 
 func (c *Config) GetStore(name string) *Storage_object {
-	for index, s := range c.Storage_objects {
+	for _, s := range c.Storage_objects {
 		if s.Name == name {
-			c.Storage_objects = append(c.Storage_objects[:index], c.Storage_objects[index+1:]...)
 			return &s
 		}
 	}
@@ -260,7 +259,7 @@ func (c *Config) RemoveStore(name string) error {
 		}
 	}
 
-	log.Printf("Target(%s) doesn't exist.", name)
+	log.Printf("Storege_object(%s) doesn't exist.", name)
 	return nil
 }
 
@@ -356,9 +355,8 @@ func (c *Config) AddTarget(storage_object, node_wwn, userid, password string) (s
 }
 
 func (c *Config) GetTarget(wwn string) *Target {
-	for index, t := range c.Targets {
+	for _, t := range c.Targets {
 		if t.Wwn == wwn {
-			c.Targets = append(c.Targets[:index], c.Targets[index+1:]...)
 			return &t
 		}
 	}
