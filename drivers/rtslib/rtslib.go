@@ -1,5 +1,5 @@
 package rtslib
 
 var (
-	defaultConfig string = "/root/saveconfig.json"
+	defaultConfig string = "/etc/target/saveconfig.json"
 )

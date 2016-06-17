@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"os/exec"
 
 	"leewill1120/yager/utils"
 )
@@ -139,7 +140,13 @@ type Config struct {
 }
 
 func NewConfig() *Config {
-	return &Config{}
+	c := &Config{}
+	if err := c.FromDisk(""); err != nil {
+		log.Println(err)
+		return nil
+	} else {
+		return c
+	}
 }
 
 func (c *Config) Print() {
@@ -172,6 +179,15 @@ func (c *Config) ToDisk(filePath string) error {
 	} else {
 		return ioutil.WriteFile(filePath, data, 0755)
 	}
+}
+
+func (c *Config) Restore(filePath string) error {
+	if "" == filePath {
+		filePath = defaultConfig
+	}
+
+	cmd := exec.Command("targetctl", "restore")
+	return cmd.Run()
 }
 
 func (c *Config) AddBlockStore(dev, name string) error {
@@ -221,6 +237,18 @@ func (c *Config) AddBlockStore(dev, name string) error {
 	so.Attributes.Unmap_granularity_alignment = 0
 
 	c.Storage_objects = append(c.Storage_objects, so)
+	return nil
+}
+
+func (c *Config) GetStore(name string) *Storage_object {
+	for index, s := range c.Storage_objects {
+		if s.Name == name {
+			c.Storage_objects = append(c.Storage_objects[:index], c.Storage_objects[index+1:]...)
+			return &s
+		}
+	}
+
+	log.Printf("Target(%s) doesn't exist.", name)
 	return nil
 }
 
@@ -325,6 +353,17 @@ func (c *Config) AddTarget(storage_object, node_wwn, userid, password string) (s
 	c.Targets = append(c.Targets, target)
 
 	return wwn, nil
+}
+
+func (c *Config) GetTarget(wwn string) *Target {
+	for index, t := range c.Targets {
+		if t.Wwn == wwn {
+			c.Targets = append(c.Targets[:index], c.Targets[index+1:]...)
+			return &t
+		}
+	}
+	log.Printf("Target(%s) doesn't exist.", wwn)
+	return nil
 }
 
 func (c *Config) RemoveTarget(wwn string) error {
