@@ -1,15 +1,16 @@
-package slave
+package worker
 
 import (
 	"encoding/json"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/pborman/uuid"
 )
 
-func (s *Slave) CreateBlock(ResponseWriter http.ResponseWriter, Request *http.Request) {
+func (s *Worker) CreateBlock(ResponseWriter http.ResponseWriter, Request *http.Request) {
 	var (
 		err                       error
 		initiatorName, lv, target string
@@ -22,10 +23,12 @@ func (s *Slave) CreateBlock(ResponseWriter http.ResponseWriter, Request *http.Re
 		username                  string                 = uuid.New()[24:]
 		password                  string                 = uuid.New()[24:]
 	)
-
-	if "POST" != Request.Method {
-		ResponseWriter.Write([]byte("not found"))
-		return
+	if "slave" == s.WorkMode {
+		cliIP := strings.Split(Request.RemoteAddr, ":")[0]
+		if !s.checkClientIP(cliIP) {
+			ResponseWriter.Write([]byte("client ip check fail."))
+			return
+		}
 	}
 
 	defer func() {
@@ -39,12 +42,14 @@ func (s *Slave) CreateBlock(ResponseWriter http.ResponseWriter, Request *http.Re
 	msgBody, err = ioutil.ReadAll(Request.Body)
 	if err != nil {
 		rspBody["result"] = "fail"
-		rspBody["detail"] = err.Error()
+		rspBody["detail"] = "invalid argument."
+		log.Println(err)
 		return
 	} else {
 		if e := json.Unmarshal(msgBody, &argsMap); e != nil {
 			rspBody["result"] = "fail"
-			rspBody["detail"] = e.Error()
+			rspBody["detail"] = "invalid argument."
+			log.Println(e, string(msgBody))
 			return
 		}
 	}
@@ -92,21 +97,24 @@ func (s *Slave) CreateBlock(ResponseWriter http.ResponseWriter, Request *http.Re
 		return
 	}
 
-	if err = s.RtsConf.ToDisk(""); err != nil {
+	//notify to apply setting
+	c := make(chan error)
+	s.ApplyChan <- c
+	err = <-c
+	if err != nil {
 		log.Println(err)
 		rspBody["result"] = "fail"
 		rspBody["detail"] = err.Error()
 		return
 	}
 
-	if err = s.RtsConf.Restore(""); err != nil {
-		log.Println(err)
-		rspBody["result"] = "fail"
-		rspBody["detail"] = err.Error()
-		return
-	}
 	rspBody["result"] = "success"
 	rspBody["target"] = target
 	rspBody["userid"] = username
 	rspBody["password"] = password
+	rspBody["host"] = strings.Split(Request.Host, ":")[0]
+	rspBody["port"] = -1
+	if stTarget := s.RtsConf.GetTarget(target); stTarget != nil {
+		rspBody["port"] = stTarget.Tpgs[0].Portals[0].Port
+	}
 }

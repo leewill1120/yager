@@ -15,15 +15,11 @@ func (s *Worker) SystemInfo(rsp http.ResponseWriter, req *http.Request) {
 	rspBody["status"] = "stopped"
 
 	if "slave" == s.WorkMode {
-		cliIP := strings.Split(req.Host, ":")[0]
+		cliIP := strings.Split(req.RemoteAddr, ":")[0]
 		if !s.checkClientIP(cliIP) {
-			rsp.Write([]byte("404 not found"))
+			rsp.Write([]byte("client ip check fail."))
 			return
 		}
-	}
-	if "GET" != req.Method {
-		rsp.Write([]byte("method not found"))
-		return
 	}
 
 	defer func() {

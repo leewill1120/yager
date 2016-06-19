@@ -187,7 +187,11 @@ func (c *Config) Restore(filePath string) error {
 	}
 
 	cmd := exec.Command("targetctl", "restore")
-	return cmd.Run()
+	if buf, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("%s, %s", err, string(buf))
+	} else {
+		return nil
+	}
 }
 
 func (c *Config) AddBlockStore(dev, name string) error {

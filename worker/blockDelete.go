@@ -17,16 +17,11 @@ func (s *Worker) DeleteBlock(ResponseWriter http.ResponseWriter, Request *http.R
 	)
 
 	if "slave" == s.WorkMode {
-		cliIP := strings.Split(Request.Host, ":")[0]
+		cliIP := strings.Split(Request.RemoteAddr, ":")[0]
 		if !s.checkClientIP(cliIP) {
-			ResponseWriter.Write([]byte("404 not found"))
+			ResponseWriter.Write([]byte("client ip check fail."))
 			return
 		}
-	}
-
-	if "POST" != Request.Method {
-		ResponseWriter.Write([]byte("method not found"))
-		return
 	}
 
 	defer func() {
@@ -41,14 +36,14 @@ func (s *Worker) DeleteBlock(ResponseWriter http.ResponseWriter, Request *http.R
 	if reqMsg, err = ioutil.ReadAll(Request.Body); err != nil {
 		log.Println(err)
 		rspBody["result"] = "fail"
-		rspBody["detail"] = err.Error()
+		rspBody["detail"] = "invalid argument."
 		return
 	}
 
 	if err = json.Unmarshal(reqMsg, &reqBody); err != nil {
 		log.Println(err)
 		rspBody["result"] = "fail"
-		rspBody["detail"] = err.Error()
+		rspBody["detail"] = "invalid argument."
 		return
 	}
 
@@ -91,14 +86,11 @@ func (s *Worker) DeleteBlock(ResponseWriter http.ResponseWriter, Request *http.R
 		return
 	}
 
-	if err = s.RtsConf.ToDisk(""); err != nil {
-		log.Println(err)
-		rspBody["result"] = "fail"
-		rspBody["detail"] = err.Error()
-		return
-	}
-
-	if err = s.RtsConf.Restore(""); err != nil {
+	//notify to apply setting
+	c := make(chan error)
+	s.ApplyChan <- c
+	err = <-c
+	if err != nil {
 		log.Println(err)
 		rspBody["result"] = "fail"
 		rspBody["detail"] = err.Error()

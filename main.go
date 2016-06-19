@@ -36,11 +36,13 @@ func startManager(args []string) {
 	var (
 		listenPort   int
 		registerCode string
+		c            chan interface{}
 	)
 	listenPort, _ = strconv.Atoi(args[0])
 	registerCode = args[1]
 	m := manager.NewManager(listenPort, registerCode)
-	m.Run()
+	m.Run(c)
+	log.Println("manager stopped, reason:%s\n", <-c)
 }
 func startWorker(mode string, args []string) {
 	var (

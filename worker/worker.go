@@ -1,21 +1,19 @@
 package worker
 
 import (
-	"bytes"
-	"encoding/json"
+	"leewill1120/mux"
+	"leewill1120/yager/drivers/lvm"
+	"leewill1120/yager/drivers/rtslib"
 	"log"
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
-
-	"leewill1120/yager/drivers/lvm"
-	"leewill1120/yager/drivers/rtslib"
 )
 
 type Worker struct {
 	VG           *lvm.VolumeGroup
 	RtsConf      *rtslib.Config
+	ApplyChan    chan chan error
 	ListenPort   int
 	MasterIP     string
 	MasterPort   int
@@ -32,17 +30,13 @@ func NewWorker(workmode, masterip string, masterport, listenport int, registerco
 		MasterPort:   masterport,
 		WorkMode:     workmode,
 		RegisterCode: registercode,
+		ApplyChan:    make(chan chan error),
 	}
 	if s.RtsConf == nil || s.VG == nil {
 		return nil
 	} else {
 		return s
 	}
-}
-
-func (s *Worker) test(ResponseWriter http.ResponseWriter, Request *http.Request) {
-	text := "This is a test page"
-	ResponseWriter.Write([]byte(text))
 }
 
 func (s *Worker) checkClientIP(clientIP string) bool {
@@ -53,39 +47,33 @@ func (s *Worker) checkClientIP(clientIP string) bool {
 	}
 }
 
-func (s *Worker) Register() {
-	for {
-		msgBody := make(map[string]interface{})
-		msgBody["registerCode"] = s.RegisterCode
-		msgBody["port"] = s.ListenPort
-		var (
-			err error
-			buf []byte
-		)
-		buf, err = json.Marshal(msgBody)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		body := bytes.NewBuffer(buf)
-		if _, err := http.Post("http://"+s.MasterIP+":"+strconv.Itoa(s.MasterPort), "application/json", body); err != nil {
-			log.Printf("register failed, reason:%s\n", err)
-		}
-		time.Sleep(time.Second * 10)
-	}
-}
-
 func (s *Worker) Run(c chan error) {
-	apiMux := http.NewServeMux()
-	apiMux.HandleFunc("/test", s.test)
-	apiMux.HandleFunc("/block/create", s.CreateBlock)
-	apiMux.HandleFunc("/block/delete", s.DeleteBlock)
-	apiMux.HandleFunc("/block/list", s.ListBlock)
-	apiMux.HandleFunc("/system/info", s.SystemInfo)
+	go func() {
+		for {
+			c := <-s.ApplyChan
+
+			if err := s.RtsConf.ToDisk(""); err != nil {
+				c <- err
+				return
+			}
+
+			if err := s.RtsConf.Restore(""); err != nil {
+				c <- err
+				return
+			}
+			c <- nil
+		}
+	}()
+
+	router := mux.NewRouter()
+	router.HandleFunc("/block/create", s.CreateBlock).Methods("POST")
+	router.HandleFunc("/block/delete", s.DeleteBlock).Methods("POST")
+	router.HandleFunc("/block/list", s.ListBlock).Methods("GET")
+	router.HandleFunc("/system/info", s.SystemInfo).Methods("GET")
 
 	apiServer := &http.Server{
 		Addr:    "0.0.0.0:" + strconv.Itoa(s.ListenPort),
-		Handler: apiMux,
+		Handler: router,
 	}
 
 	go func() {
