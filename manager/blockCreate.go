@@ -70,19 +70,20 @@ func (m *Manager) CreateBlock(rsp http.ResponseWriter, req *http.Request) {
 	sort.Sort(availableList)
 
 	for _, w := range availableList.List {
-		buf, _ = json.Marshal(reqBody)
-		if rsp, err := http.Post("http://"+w.IP+":"+strconv.Itoa(w.Port)+"/block/create", "application/json", bytes.NewBuffer(buf)); err == nil {
-			if (rsp.StatusCode/100 == 4) || (rsp.StatusCode/100 == 5) {
-				log.Printf("server return %d.", rsp.StatusCode)
+		if rsp2, err := http.Post("http://"+w.IP+":"+strconv.Itoa(w.Port)+"/block/create", "application/json", bytes.NewBuffer(buf)); err == nil {
+			if (rsp2.StatusCode/100 == 4) || (rsp2.StatusCode/100 == 5) {
+				log.Printf("worker return %d.", rsp2.StatusCode)
 				continue
 			}
-			buf, err = ioutil.ReadAll(rsp.Body)
-			if err != nil {
+
+			if buf, err = ioutil.ReadAll(rsp2.Body); err != nil {
+				rspBody["detail"] = err.Error()
 				log.Println(err)
 				continue
 			}
-			err = json.Unmarshal(buf, &rspBody)
-			if err != nil {
+			if err = json.Unmarshal(buf, &rspBody); err != nil {
+				rspBody["result"] = "fail"
+				rspBody["detail"] = err.Error()
 				log.Println(err, string(buf))
 				continue
 			}
@@ -91,10 +92,13 @@ func (m *Manager) CreateBlock(rsp http.ResponseWriter, req *http.Request) {
 				continue
 			}
 			//success
-			break
+			m.TargetWorkerList[rspBody["target"].(string)] = rspBody["host"].(string)
+			return
 		} else {
 			log.Println(err)
 			continue
 		}
+
+		//Here: failed to create block on every worker
 	}
 }

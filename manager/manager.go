@@ -1,17 +1,24 @@
 package manager
 
 import (
+	"leewill1120/mux"
+	"leewill1120/yager/manager/worker"
 	"log"
 	"net/http"
 	"strconv"
-
-	"leewill1120/mux"
-	"leewill1120/yager/manager/worker"
 )
+
+type Target struct {
+	Name     string
+	Worker   string // ip address of worker
+	UserID   string
+	Password string
+}
 
 type Manager struct {
 	ListenPort       int
 	RegisterCode     string
+	ClientToken      string
 	WorkerList       map[string]*worker.Worker //The key is ip address of worker
 	TargetWorkerList map[string]string         //The key is target, value is ip address of worker
 }

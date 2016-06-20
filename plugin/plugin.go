@@ -1,4 +1,4 @@
-package client
+package plugin
 
 import (
 	"bytes"
@@ -6,15 +6,23 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
+	"path"
 	"strings"
+	"syscall"
 	"time"
+
+	"leewill1120/mux"
+	"leewill1120/yager/plugin/volume"
 )
 
 var (
 	defaultInitiatorNameFile string = "/etc/iscsi/initiatorname.iscsi"
+	defaultUnixDomainSocket  string = "/run/docker/plugins/yager.sock"
 )
 
 type Block struct {
@@ -24,38 +32,105 @@ type Block struct {
 	Password string
 }
 
-type Client struct {
-	ServIP    string
-	ServPort  string
-	BlockList map[string]string
+type Plugin struct {
+	StoreServIP   string
+	StoreServPort int
+	BlockList     map[string]string
+	VolumeList    map[string]*volume.Volume
+	InitiatorName string
 }
 
-func NewClient(ip, port string) *Client {
-	c := &Client{
-		ServIP:    ip,
-		ServPort:  port,
-		BlockList: make(map[string]string),
+func NewPlugin(storeServIP string, storeServPort int) *Plugin {
+	p := &Plugin{
+		StoreServIP:   storeServIP,
+		StoreServPort: storeServPort,
 	}
-	c.loadBlockList()
-	return c
+
+	if d, e := ioutil.ReadFile(defaultInitiatorNameFile); e != nil {
+		log.Fatal(e)
+	} else {
+		InitiatorName := strings.Replace(string(d), "\n", "", -1)
+		InitiatorName = strings.Replace(string(d), "InitiatorName=", "", -1)
+		InitiatorName = strings.TrimSpace(InitiatorName)
+		p.InitiatorName = InitiatorName
+	}
+	if err := p.FromDisk(); err != nil {
+		log.Fatal(err)
+	}
+	return p
 }
 
-func (c *Client) loadBlockList() {
-	home := os.Getenv("HOME")
-	configPath := home + "/.yager.json"
-	if d, e := ioutil.ReadFile(configPath); e != nil {
-		return
+func (p *Plugin) Run() {
+	p.createUnixSock(defaultUnixDomainSocket)
+
+	router := mux.NewRouter()
+	router.HandleFunc("/Plugin.Activate", p.Activate).Methods("POST")
+	router.HandleFunc("/VolumeDriver.Create", p.CreateVolume).Methods("POST")
+	router.HandleFunc("/VolumeDriver.Remove", p.RemoveVolume).Methods("POST")
+	router.HandleFunc("/VolumeDriver.Mount", p.MountVolume).Methods("POST")
+	router.HandleFunc("/VolumeDriver.Path", p.VolumePath).Methods("POST")
+	router.HandleFunc("/VolumeDriver.Get", p.GetVolume).Methods("POST")
+	router.HandleFunc("/VolumeDriver.List", p.ListVolumes).Methods("POST")
+
+	addr := &net.UnixAddr{
+		Name: defaultUnixDomainSocket,
+		Net:  "unix",
+	}
+	l, e := net.ListenUnix("unix", addr)
+	if e != nil {
+		log.Fatal(e)
+	}
+	http.Serve(l, router)
+}
+
+func (p *Plugin) createUnixSock(unixsock string) error {
+	if _, err := os.Stat(unixsock); err != nil {
+		os.MkdirAll(path.Dir(unixsock), os.ModeDir)
+	}
+	c := make(chan os.Signal)
+	signal.Notify(c, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
+	go func() {
+		fmt.Printf("Received stop signal(%s)\n", <-c)
+		os.Remove(unixsock)
+		os.Exit(0)
+	}()
+	return nil
+}
+
+func (p *Plugin) Activate(rsp http.ResponseWriter, req *http.Request) {
+	rspBody := make(map[string]interface{})
+	implements := make([]string, 0)
+	implements = append(implements, "VolumeDriver")
+	rspBody["Implements"] = implements
+	if buf, err := json.Marshal(rspBody); err != nil {
+		log.Println(err)
+		rsp.Write([]byte(err.Error()))
 	} else {
-		if e = json.Unmarshal(d, &c.BlockList); e != nil {
-			log.Println(e)
+		_, err = rsp.Write(buf)
+		if err != nil {
+			log.Println(err)
 		}
 	}
 }
 
-func (c *Client) saveBlockList() {
+func (p *Plugin) FromDisk() error {
 	home := os.Getenv("HOME")
 	configPath := home + "/.yager.json"
-	if b, err := json.Marshal(&c.BlockList); err != nil {
+	if d, e := ioutil.ReadFile(configPath); e != nil {
+		return e
+	} else {
+		if e = json.Unmarshal(d, &p.VolumeList); e != nil {
+			log.Println(e)
+			return e
+		}
+	}
+	return nil
+}
+
+func (p *Plugin) ToDisk() {
+	home := os.Getenv("HOME")
+	configPath := home + "/.yager.json"
+	if b, err := json.Marshal(p.VolumeList); err != nil {
 		log.Println(err)
 	} else {
 		if err = ioutil.WriteFile(configPath, b, 0755); err != nil {
@@ -79,41 +154,6 @@ func getPartitions() map[string]struct{} {
 		}
 	}
 	return Partitions
-}
-
-func getBlock(initiatorname, ip, port string, size float64) *Block {
-	context := map[string]interface{}{
-		"InitiatorName": initiatorname,
-		"Size":          size,
-	}
-	bs, err := json.Marshal(context)
-	if err != nil {
-		return nil
-	}
-	body := bytes.NewBuffer(bs)
-	if rsp, err := http.Post("http://"+ip+":"+port+"/block/create", "application/json", body); err != nil {
-		fmt.Println(err)
-		return nil
-	} else {
-		var rspMap map[string]interface{}
-		jd := json.NewDecoder(rsp.Body)
-		if err := jd.Decode(&rspMap); err != nil {
-			fmt.Println(err)
-			return nil
-		} else {
-			if "success" == (rspMap["result"]).(string) {
-				return &Block{
-					Target:   (rspMap["target"]).(string),
-					Username: (rspMap["userid"]).(string),
-					Password: (rspMap["password"]).(string),
-					IP:       ip,
-				}
-			} else {
-				fmt.Println(rspMap["detail"])
-				return nil
-			}
-		}
-	}
 }
 
 func removeBlock(target, ip, port string) error {
@@ -198,14 +238,15 @@ func getNewPartition(b *Block) string {
 	return newParition
 }
 
-func (c *Client) CmdGetBlock(size float64) {
+/*
+func (p *Plugin) CmdGetBlock(size float64) {
 	if d, e := ioutil.ReadFile(defaultInitiatorNameFile); e != nil {
 		log.Fatal(e)
 	} else {
 		InitiatorName := strings.Replace(string(d), "\n", "", -1)
 		InitiatorName = strings.Replace(string(d), "InitiatorName=", "", -1)
 		InitiatorName = strings.TrimSpace(InitiatorName)
-		b := getBlock(InitiatorName, c.ServIP, c.ServPort, size)
+		b := getBlock(InitiatorName, c.StoreServIP, c.StoreServPort, size)
 		if b == nil {
 			log.Fatal("failed to get block")
 		}
@@ -215,20 +256,4 @@ func (c *Client) CmdGetBlock(size float64) {
 		fmt.Printf("got new dev: /dev/%s\n", newParition)
 	}
 }
-
-//c.CmdRemoveBlock
-func (c *Client) CmdRemoveBlock(dev string) {
-	target := c.BlockList[strings.TrimSpace(dev)]
-
-	if err := logoutTarget(target); err != nil {
-		log.Fatal(err)
-	}
-
-	if err := removeBlock(target, c.ServIP, c.ServPort); err != nil {
-		log.Fatal(err)
-	}
-
-	delete(c.BlockList, strings.TrimSpace(dev))
-	c.saveBlockList()
-	fmt.Printf("removed block: %s\n", dev)
-}
+*/

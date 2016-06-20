@@ -49,7 +49,7 @@ func (s *Worker) DeleteBlock(ResponseWriter http.ResponseWriter, Request *http.R
 
 	if target_i, exist_i := reqBody["target"]; !exist_i {
 		rspBody["result"] = "fail"
-		rspBody["detail"] = "target not exist."
+		rspBody["detail"] = "argument target not exist."
 		return
 	} else {
 		target = target_i.(string)

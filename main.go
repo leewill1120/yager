@@ -5,8 +5,8 @@ import (
 	"os"
 	"strconv"
 
-	"leewill1120/yager/client"
 	"leewill1120/yager/manager"
+	"leewill1120/yager/plugin"
 	"leewill1120/yager/worker"
 )
 
@@ -27,8 +27,10 @@ func main() {
 		startWorker("slave", os.Args[2:])
 	case "standalone":
 		startWorker("standalone", os.Args[2:])
+	case "plugin":
+		startPlugin(os.Args[2:])
 	default:
-		startClient(os.Args[2:])
+		log.Fatalf("mode(%s) doesn't support", mode)
 	}
 }
 
@@ -72,17 +74,9 @@ func startWorker(mode string, args []string) {
 	}
 }
 
-func startClient(args []string) {
-	cmd := args[0]
-	c := client.NewClient(args[1], args[2])
-	switch cmd {
-	case "getBlock":
-		size, _ := strconv.ParseFloat(args[3], 64)
-		c.CmdGetBlock(size)
-	case "removeBlock":
-		devPath := args[3]
-		c.CmdRemoveBlock(devPath)
-	default:
-		log.Fatal("command " + cmd + " not found.")
-	}
+func startPlugin(args []string) {
+	StoreManagerIP := args[0]
+	StoreManagerPort, _ := strconv.Atoi(args[1])
+	p := plugin.NewPlugin(StoreManagerIP, StoreManagerPort)
+	p.Run()
 }
