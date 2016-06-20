@@ -98,7 +98,8 @@ func (m *Manager) CreateBlock(rsp http.ResponseWriter, req *http.Request) {
 			log.Println(err)
 			continue
 		}
-
-		//Here: failed to create block on every worker
 	}
+	//Here: failed to create block on every worker
+	rspBody["result"] = "fail"
+	rspBody["detail"] = "free space insufficient"
 }
