@@ -15,7 +15,6 @@ import (
 	log "github.com/Sirupsen/logrus"
 
 	"leewill1120/mux"
-	"leewill1120/yager/plugin/volume"
 )
 
 var (
@@ -33,7 +32,7 @@ type Block struct {
 type Plugin struct {
 	StoreServIP   string
 	StoreServPort int
-	VolumeList    map[string]*volume.Volume
+	VolumeList    map[string]*Volume
 	InitiatorName string
 }
 
@@ -41,7 +40,7 @@ func NewPlugin(storeServIP string, storeServPort int) *Plugin {
 	p := &Plugin{
 		StoreServIP:   storeServIP,
 		StoreServPort: storeServPort,
-		VolumeList:    make(map[string]*volume.Volume),
+		VolumeList:    make(map[string]*Volume),
 	}
 
 	if d, e := ioutil.ReadFile(defaultInitiatorNameFile); e != nil {

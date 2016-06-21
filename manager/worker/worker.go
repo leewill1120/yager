@@ -32,7 +32,7 @@ func (w *Worker) GetCapInfo() {
 		if (rsp.StatusCode/100 == 4) || (rsp.StatusCode/100 == 5) {
 			log.WithFields(log.Fields{
 				"url":        url,
-				"StatusCode": rsp.StatusCode,
+				"statusCode": rsp.StatusCode,
 			}).Error("get capacity info failed.")
 		} else {
 			if buf, err := ioutil.ReadAll(rsp.Body); err != nil {

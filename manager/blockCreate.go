@@ -44,15 +44,15 @@ func (m *Manager) CreateBlock(rsp http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	if size_interface, exist = reqBody["Size"]; !exist {
+	if size_interface, exist = reqBody["size"]; !exist {
 		rspBody["result"] = "fail"
-		rspBody["detail"] = "argument Size not exist."
+		rspBody["detail"] = "argument size not exist."
 		return
 	}
 
 	if size, ok = size_interface.(float64); !ok {
 		rspBody["result"] = "fail"
-		rspBody["detail"] = "error to parse Size."
+		rspBody["detail"] = "error to parse size."
 		return
 	}
 
@@ -77,7 +77,7 @@ func (m *Manager) CreateBlock(rsp http.ResponseWriter, req *http.Request) {
 				log.WithFields(log.Fields{
 					"host":       w.IP + ":" + strconv.Itoa(w.Port),
 					"url":        url,
-					"StatusCode": rsp2.StatusCode,
+					"statusCode": rsp2.StatusCode,
 				}).Warn("create block failed.")
 				continue
 			}

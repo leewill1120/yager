@@ -32,13 +32,15 @@ type Volume struct {
 	Password      string
 	Size          float64
 	Status        int
+	Type          string //iscsi nfs cifs
 }
 
-func NewVolume(volumeName string, size float64) *Volume {
+func NewVolume(volumeName string, size float64, volumetype string) *Volume {
 	return &Volume{
 		Name:   volumeName,
 		Size:   size,
 		Status: INIT,
+		Type:   volumetype,
 	}
 }
 
@@ -52,8 +54,9 @@ func (v *Volume) GetBackendStore(storeMServIP string, storeMServPort int, initia
 		rsp     *http.Response
 	)
 
-	reqBody["InitiatorName"] = initiatorName
-	reqBody["Size"] = v.Size
+	reqBody["type"] = v.Type
+	reqBody["initiatorName"] = initiatorName
+	reqBody["size"] = v.Size
 	if buf, err = json.Marshal(reqBody); err != nil {
 		return err
 	}
@@ -80,6 +83,7 @@ func (v *Volume) GetBackendStore(storeMServIP string, storeMServPort int, initia
 	v.UserID = rspBody["userid"].(string)
 	v.Password = rspBody["password"].(string)
 	v.Target = rspBody["target"].(string)
+	v.Type = rspBody["type"].(string)
 
 	return nil
 }
@@ -174,7 +178,6 @@ func (v *Volume) LoginTarget() error {
 	return nil
 }
 
-//iscsiadm -m node -T iqn.2016-06.org.linux-iscsi.iscsi001.amd64:sn.11bad46ba54b --logout
 func (v *Volume) LogoutTarget() error {
 	cmd := exec.Command("iscsiadm", "-m", "node", "-T", v.Target, "--logout")
 	if d, err := cmd.CombinedOutput(); err != nil {

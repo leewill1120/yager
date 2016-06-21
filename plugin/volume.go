@@ -6,10 +6,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"reflect"
 	"strconv"
 	"strings"
-
-	"leewill1120/yager/plugin/volume"
 
 	log "github.com/Sirupsen/logrus"
 )
@@ -17,6 +16,13 @@ import (
 var (
 	defaultVolumeSize float64 = 1024 * 10
 )
+
+type Volume interface {
+	Name() string
+	Mount()
+	Unmount()
+	Remove()
+}
 
 func (p *Plugin) CreateVolume(rsp http.ResponseWriter, req *http.Request) {
 	var (
@@ -60,10 +66,10 @@ func (p *Plugin) CreateVolume(rsp http.ResponseWriter, req *http.Request) {
 			size = defaultVolumeSize
 		} else {
 			opts := opts_interface.(map[string]interface{})
-			if _, ok = opts["Size"]; !ok {
+			if _, ok = opts["size"]; !ok {
 				size = defaultVolumeSize
 			} else {
-				if size, err = strconv.ParseFloat(opts["Size"].(string), 64); err != nil {
+				if size, err = strconv.ParseFloat(opts["size"].(string), 64); err != nil {
 					rspBody["Err"] = err.Error()
 					return
 				}
@@ -71,29 +77,24 @@ func (p *Plugin) CreateVolume(rsp http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	v := volume.NewVolume(name, size)
-	if v == nil {
-		rspBody["Err"] = "error to get new volume."
-		return
-	}
-	if err = v.GetBackendStore(p.StoreServIP, p.StoreServPort, p.InitiatorName); err != nil {
-		rspBody["Err"] = err.Error()
-		return
-	}
-	if err = v.LoginAndGetNewDev(); err != nil {
-		rspBody["Err"] = err.Error()
+	v := p.requestVolume()
+	if v != nil {
+		rspBody["Err"] = "request volume failed."
 		return
 	}
 
-	if err = v.FormatAndMount(); err != nil {
-		rspBody["Err"] = err.Error()
-		return
+	method := reflect.ValueOf(v).MethodByName("Name")
+	if method.IsValid() {
+		name = method.Interface().(func() string)()
 	}
-	v.Status = volume.OK
-	p.VolumeList[v.Name] = v
 
+	p.VolumeList[name] = v
 	p.ToDisk()
 	rspBody["Err"] = ""
+}
+
+func (p *Plugin) requestVolume() *Volume {
+	return nil
 }
 
 func (p *Plugin) ListVolumes(rsp http.ResponseWriter, req *http.Request) {

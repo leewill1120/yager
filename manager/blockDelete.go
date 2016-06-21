@@ -62,7 +62,7 @@ func (m *Manager) DeleteBlock(rsp http.ResponseWriter, req *http.Request) {
 			log.WithFields(log.Fields{
 				"host":       w.IP + ":" + strconv.Itoa(w.Port),
 				"url":        url,
-				"StatusCode": rsp2.StatusCode,
+				"statusCode": rsp2.StatusCode,
 			}).Warn("delete block failed.")
 			return
 		}

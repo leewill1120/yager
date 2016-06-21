@@ -61,22 +61,22 @@ func (s *Worker) CreateBlock(ResponseWriter http.ResponseWriter, Request *http.R
 		}
 	}
 
-	if initiatorName_i, exist_i := msgBody["InitiatorName"]; !exist_i {
+	if initiatorName_i, exist_i := msgBody["initiatorName"]; !exist_i {
 		rspBody["result"] = "fail"
-		rspBody["detail"] = "argument InitiatorName not exist."
+		rspBody["detail"] = "argument initiatorName not exist."
 		return
 	} else {
 		initiatorName = initiatorName_i.(string)
 	}
 
-	if size_interface, exist = msgBody["Size"]; !exist {
+	if size_interface, exist = msgBody["size"]; !exist {
 		rspBody["result"] = "fail"
-		rspBody["detail"] = "argument Size not exist."
+		rspBody["detail"] = "argument size not exist."
 		return
 	} else {
 		if size, ok = size_interface.(float64); !ok {
 			rspBody["result"] = "fail"
-			rspBody["detail"] = "error to parse Size."
+			rspBody["detail"] = "error to parse size."
 			return
 		}
 	}

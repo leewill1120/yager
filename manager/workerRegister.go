@@ -103,7 +103,7 @@ func (m *Manager) WorkerRegister(rsp http.ResponseWriter, req *http.Request) {
 			if 4 == rsp2.StatusCode/100 || 5 == rsp2.StatusCode {
 				log.WithFields(log.Fields{
 					"url":        url,
-					"StatusCode": rsp2.StatusCode,
+					"statusCode": rsp2.StatusCode,
 					"worker":     workerIP,
 				}).Error("get targets on this worker failed.")
 				goto end
