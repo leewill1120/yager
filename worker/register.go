@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"strconv"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
 )
 
 var (
@@ -42,10 +43,14 @@ func (s *Worker) Register() {
 			}
 			buf, err = ioutil.ReadAll(rsp.Body)
 			if err != nil {
-				log.Println(err)
+				log.Error(err)
 			} else {
 				if err = json.Unmarshal(buf, &rspBody); err != nil {
-					log.Println(err)
+					log.WithFields(log.Fields{
+						"reason": err,
+						"data":   string(buf),
+					}).Error("json.Unmarshal failed.")
+
 				} else {
 					if "success" != rspBody["result"].(string) {
 						log.Println(rspBody["detail"].(string))

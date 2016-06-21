@@ -3,11 +3,12 @@ package manager
 import (
 	"encoding/json"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
 
 	"leewill1120/yager/manager/worker"
 )
@@ -27,7 +28,10 @@ func (m *Manager) WorkerRegister(rsp http.ResponseWriter, req *http.Request) {
 	rspBody["result"] = "fail"
 	defer func() {
 		if buf, err = json.Marshal(rspBody); err != nil {
-			log.Println(err)
+			log.WithFields(log.Fields{
+				"reason": err,
+				"data":   rspBody,
+			}).Error("json.Marshal failed.")
 		} else {
 			rsp.Write(buf)
 		}
@@ -36,12 +40,15 @@ func (m *Manager) WorkerRegister(rsp http.ResponseWriter, req *http.Request) {
 	buf, err = ioutil.ReadAll(req.Body)
 	if err != nil {
 		rspBody["detail"] = "invalid argument."
-		log.Println(err)
+		log.Error(err)
 		return
 	}
 	if err = json.Unmarshal(buf, &reqBody); err != nil {
 		rspBody["detail"] = "invalid argument."
-		log.Println(err)
+		log.WithFields(log.Fields{
+			"reason": err,
+			"data":   string(buf),
+		}).Error("json.Unmarshal failed.")
 		return
 	}
 
@@ -71,7 +78,7 @@ func (m *Manager) WorkerRegister(rsp http.ResponseWriter, req *http.Request) {
 			Port:  workerPort,
 			Timer: time.NewTimer(aliveTimeout),
 		}
-		log.Printf("New worker(%s:%d) joined", workerIP, workerPort)
+		log.Infof("New worker(%s:%d) joined", workerIP, workerPort)
 		go func() {
 			<-m.WorkerList[workerIP].Timer.C
 			delete(m.WorkerList, workerIP)
@@ -80,30 +87,46 @@ func (m *Manager) WorkerRegister(rsp http.ResponseWriter, req *http.Request) {
 					delete(m.TargetWorkerList, k)
 				}
 			}
-			log.Printf("worker(%s:%d) leave.\n", workerIP, workerPort)
+			log.Infof("worker(%s:%d) leave.\n", workerIP, workerPort)
 		}()
 
 		//Get targets on this worker.
 		rsp2Body := make(map[string]interface{})
-		if rsp2, err := http.Get("http://" + m.WorkerList[workerIP].IP + ":" + strconv.Itoa(m.WorkerList[workerIP].Port) + "/block/list"); err != nil {
-			log.Printf("failed to get targets on this worker, reason:%s\n", err)
+		url := "http://" + m.WorkerList[workerIP].IP + ":" + strconv.Itoa(m.WorkerList[workerIP].Port) + "/block/list"
+		if rsp2, err := http.Get(url); err != nil {
+			log.WithFields(log.Fields{
+				"url":    url,
+				"reason": err,
+				"worker": workerIP,
+			}).Error("get targets on this worker failed.")
 		} else {
 			if 4 == rsp2.StatusCode/100 || 5 == rsp2.StatusCode {
-				log.Printf("Worker return %d\n", rsp2.StatusCode)
+				log.WithFields(log.Fields{
+					"url":        url,
+					"StatusCode": rsp2.StatusCode,
+					"worker":     workerIP,
+				}).Error("get targets on this worker failed.")
 				goto end
 			}
 			if buf, err = ioutil.ReadAll(rsp2.Body); err != nil {
-				log.Println(err)
+				log.Error(err)
 				goto end
 			}
 
 			if err = json.Unmarshal(buf, &rsp2Body); err != nil {
-				log.Println(err, string(buf))
+				log.WithFields(log.Fields{
+					"reason": err,
+					"data":   string(buf),
+				}).Error("json.Unmarshal failed.")
 				goto end
 			}
 
 			if "success" != rsp2Body["result"].(string) {
-				log.Printf("failed to get targets on this worker, reason:%s\n", rsp2Body["detail"])
+				log.WithFields(log.Fields{
+					"url":    url,
+					"reason": rsp2Body["detail"],
+					"worker": workerIP,
+				}).Error("get targets on this worker failed.")
 				goto end
 			}
 

@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"leewill1120/yager/plugin/volume"
+
+	log "github.com/Sirupsen/logrus"
 )
 
 var (
@@ -29,11 +30,14 @@ func (p *Plugin) CreateVolume(rsp http.ResponseWriter, req *http.Request) {
 
 	defer func() {
 		if buf, err = json.Marshal(rspBody); err != nil {
-			log.Println(err)
+			log.WithFields(log.Fields{
+				"reason": err,
+				"data":   rspBody,
+			}).Error("json.Marshal failed.")
 			return
 		}
 		if _, err = rsp.Write(buf); err != nil {
-			log.Println(err)
+			log.Error(err)
 			return
 		}
 	}()
@@ -101,11 +105,14 @@ func (p *Plugin) ListVolumes(rsp http.ResponseWriter, req *http.Request) {
 
 	defer func() {
 		if buf, err = json.Marshal(rspBody); err != nil {
-			log.Println(err)
+			log.WithFields(log.Fields{
+				"reason": err,
+				"data":   rspBody,
+			}).Error("json.Marshal failed.")
 			return
 		}
 		if _, err = rsp.Write(buf); err != nil {
-			log.Println(err)
+			log.Error(err)
 			return
 		}
 	}()
@@ -133,11 +140,14 @@ func (p *Plugin) MountVolume(rsp http.ResponseWriter, req *http.Request) {
 
 	defer func() {
 		if buf, err = json.Marshal(rspBody); err != nil {
-			log.Println(err)
+			log.WithFields(log.Fields{
+				"reason": err,
+				"data":   rspBody,
+			}).Error("json.Marshal failed.")
 			return
 		}
 		if _, err = rsp.Write(buf); err != nil {
-			log.Println(err)
+			log.Error(err)
 			return
 		}
 	}()
@@ -170,11 +180,14 @@ func (p *Plugin) UnmountVolume(rsp http.ResponseWriter, req *http.Request) {
 
 	defer func() {
 		if buf, err = json.Marshal(rspBody); err != nil {
-			log.Println(err)
+			log.WithFields(log.Fields{
+				"reason": err,
+				"data":   rspBody,
+			}).Error("json.Marshal failed.")
 			return
 		}
 		if _, err = rsp.Write(buf); err != nil {
-			log.Println(err)
+			log.Error(err)
 			return
 		}
 	}()
@@ -191,11 +204,14 @@ func (p *Plugin) RemoveVolume(rsp http.ResponseWriter, req *http.Request) {
 
 	defer func() {
 		if buf, err = json.Marshal(rspBody); err != nil {
-			log.Println(err)
+			log.WithFields(log.Fields{
+				"reason": err,
+				"data":   rspBody,
+			}).Error("json.Marshal failed.")
 			return
 		}
 		if _, err = rsp.Write(buf); err != nil {
-			log.Println(err)
+			log.Error(err)
 			return
 		}
 	}()
@@ -240,11 +256,14 @@ func (p *Plugin) VolumePath(rsp http.ResponseWriter, req *http.Request) {
 
 	defer func() {
 		if buf, err = json.Marshal(rspBody); err != nil {
-			log.Println(err)
+			log.WithFields(log.Fields{
+				"reason": err,
+				"data":   rspBody,
+			}).Error("json.Marshal failed.")
 			return
 		}
 		if _, err = rsp.Write(buf); err != nil {
-			log.Println(err)
+			log.Error(err)
 			return
 		}
 	}()
@@ -279,11 +298,14 @@ func (p *Plugin) GetVolume(rsp http.ResponseWriter, req *http.Request) {
 
 	defer func() {
 		if buf, err = json.Marshal(rspBody); err != nil {
-			log.Println(err)
+			log.WithFields(log.Fields{
+				"reason": err,
+				"data":   rspBody,
+			}).Error("json.Marshal failed.")
 			return
 		}
 		if _, err = rsp.Write(buf); err != nil {
-			log.Println(err)
+			log.Error(err)
 			return
 		}
 	}()
@@ -319,9 +341,24 @@ func removeBlock(target, ip, port string) error {
 		return err
 	}
 	body := bytes.NewBuffer(bs)
-	if rsp, err := http.Post("http://"+ip+":"+port+"/block/delete", "application/json", body); err != nil {
+	url := "http://" + ip + ":" + port + "/block/delete"
+	if rsp, err := http.Post(url, "application/json", body); err != nil {
+		log.WithFields(log.Fields{
+			"host":   ip + ":" + port,
+			"url":    url,
+			"reason": err,
+		}).Warn("delete block failed.")
 		return err
 	} else {
+		if 4 == rsp.StatusCode/100 || 5 == rsp.StatusCode {
+			log.WithFields(log.Fields{
+				"host":       ip + ":" + port,
+				"url":        url,
+				"StatusCode": rsp.StatusCode,
+			}).Warn("delete block failed.")
+			return fmt.Errorf("Worker return %d", rsp.StatusCode)
+		}
+
 		var rspMap map[string]interface{}
 		jd := json.NewDecoder(rsp.Body)
 		if err := jd.Decode(&rspMap); err != nil {

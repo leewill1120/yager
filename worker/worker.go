@@ -4,10 +4,11 @@ import (
 	"leewill1120/mux"
 	"leewill1120/yager/drivers/lvm"
 	"leewill1120/yager/drivers/rtslib"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
+
+	log "github.com/Sirupsen/logrus"
 )
 
 type Worker struct {
@@ -77,7 +78,7 @@ func (s *Worker) Run(c chan error) {
 	}
 
 	go func() {
-		log.Println("Worker listening on " + apiServer.Addr)
+		log.Infof("Worker listening on %s.", apiServer.Addr)
 		c <- apiServer.ListenAndServe()
 	}()
 

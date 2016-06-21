@@ -2,8 +2,9 @@ package manager
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
+
+	log "github.com/Sirupsen/logrus"
 )
 
 func (m *Manager) GetWorkerList(rsp http.ResponseWriter, req *http.Request) {
@@ -16,7 +17,10 @@ func (m *Manager) GetWorkerList(rsp http.ResponseWriter, req *http.Request) {
 	rspBody["result"] = "fail"
 	defer func() {
 		if buf, err = json.Marshal(rspBody); err != nil {
-			log.Println(err)
+			log.WithFields(log.Fields{
+				"reason": err,
+				"data":   rspBody,
+			}).Error("json.Marshal failed.")
 		} else {
 			rsp.Write(buf)
 		}

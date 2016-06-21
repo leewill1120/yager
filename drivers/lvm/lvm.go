@@ -2,10 +2,11 @@ package lvm
 
 import (
 	"fmt"
-	"log"
 	"os/exec"
 	"strconv"
 	"strings"
+
+	log "github.com/Sirupsen/logrus"
 
 	"leewill1120/yager/utils"
 )
@@ -38,22 +39,6 @@ func NewVG(vgname string) *VolumeGroup {
 	}
 	return vg
 }
-
-func monitorStderr(cmd *exec.Cmd) {
-	stderr, _ := cmd.StderrPipe()
-	defer stderr.Close()
-	go func() {
-		for {
-			p := make([]byte, 1024)
-			if length, err := stderr.Read(p); err == nil {
-				log.Println(string(p[:length-1]))
-			} else {
-				break
-			}
-		}
-	}()
-}
-
 func (vg *VolumeGroup) update() error {
 	e1 := vg.getVGSize()
 	e2 := vg.getLVs()
@@ -141,7 +126,9 @@ func (vg *VolumeGroup) RemoveLV(lvname string) error {
 			}
 		}
 	}
-	log.Printf("Logic volume(%s) doesn't exists.", lvname)
+	log.WithFields(log.Fields{
+		"logic volume": lvname,
+	}).Warn("logic volume doesn't exists.")
 	return nil
 }
 

@@ -4,8 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os/exec"
+
+	log "github.com/Sirupsen/logrus"
 
 	"leewill1120/yager/utils"
 )
@@ -142,7 +143,7 @@ type Config struct {
 func NewConfig() *Config {
 	c := &Config{}
 	if err := c.FromDisk(""); err != nil {
-		log.Println(err)
+		log.Error(err)
 		return nil
 	} else {
 		return c
@@ -151,7 +152,7 @@ func NewConfig() *Config {
 
 func (c *Config) Print() {
 	if data, err := json.MarshalIndent(c, "", " "); err != nil {
-		log.Println(err)
+		log.Error(err)
 	} else {
 		fmt.Println(string(data))
 	}
@@ -250,8 +251,9 @@ func (c *Config) GetStore(name string) *Storage_object {
 			return &s
 		}
 	}
-
-	log.Printf("Target(%s) doesn't exist.", name)
+	log.WithFields(log.Fields{
+		"storage object": name,
+	}).Warn("storage object doesn't exist.")
 	return nil
 }
 
@@ -263,7 +265,9 @@ func (c *Config) RemoveStore(name string) error {
 		}
 	}
 
-	log.Printf("Storege_object(%s) doesn't exist.", name)
+	log.WithFields(log.Fields{
+		"storage object": name,
+	}).Warn("storage object doesn't exist.")
 	return nil
 }
 
@@ -364,7 +368,9 @@ func (c *Config) GetTarget(wwn string) *Target {
 			return &t
 		}
 	}
-	log.Printf("Target(%s) doesn't exist.", wwn)
+	log.WithFields(log.Fields{
+		"target": wwn,
+	}).Warn("could not get target, target doesn't exist.")
 	return nil
 }
 
@@ -375,6 +381,9 @@ func (c *Config) RemoveTarget(wwn string) error {
 			return nil
 		}
 	}
-	log.Printf("Target(%s) doesn't exist.", wwn)
+	log.WithFields(log.Fields{
+		"target": wwn,
+		"reason": "target doesn't  exist.",
+	}).Warn("remove target failed.")
 	return nil
 }

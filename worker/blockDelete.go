@@ -3,9 +3,10 @@ package worker
 import (
 	"encoding/json"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"strings"
+
+	log "github.com/Sirupsen/logrus"
 )
 
 func (s *Worker) DeleteBlock(ResponseWriter http.ResponseWriter, Request *http.Request) {
@@ -26,22 +27,28 @@ func (s *Worker) DeleteBlock(ResponseWriter http.ResponseWriter, Request *http.R
 
 	defer func() {
 		if sendbuf, err := json.Marshal(rspBody); err != nil {
-			log.Println(err)
+			log.WithFields(log.Fields{
+				"reason": err,
+				"data":   rspBody,
+			}).Error("json.Marshal failed.")
 		} else {
 			ResponseWriter.Write(sendbuf)
 		}
 	}()
 
-	reqMsg := make([]byte, 1024)
-	if reqMsg, err = ioutil.ReadAll(Request.Body); err != nil {
-		log.Println(err)
+	buf := make([]byte, 1024)
+	if buf, err = ioutil.ReadAll(Request.Body); err != nil {
 		rspBody["result"] = "fail"
 		rspBody["detail"] = "invalid argument."
+		log.Error(err)
 		return
 	}
 
-	if err = json.Unmarshal(reqMsg, &reqBody); err != nil {
-		log.Println(err)
+	if err = json.Unmarshal(buf, &reqBody); err != nil {
+		log.WithFields(log.Fields{
+			"reason": err,
+			"data":   string(buf),
+		}).Error("json.Unmarshal failed.")
 		rspBody["result"] = "fail"
 		rspBody["detail"] = "invalid argument."
 		return
@@ -73,16 +80,16 @@ func (s *Worker) DeleteBlock(ResponseWriter http.ResponseWriter, Request *http.R
 	lvName := strings.Split(lvPath, "/")[len(strings.Split(lvPath, "/"))-1]
 
 	if err = s.RtsConf.RemoveTarget(target); err != nil {
-		log.Println(err)
 		rspBody["result"] = "fail"
 		rspBody["detail"] = err.Error()
+		log.Error(err)
 		return
 	}
 
 	if err = s.RtsConf.RemoveStore(soName); err != nil {
-		log.Println(err)
 		rspBody["result"] = "fail"
 		rspBody["detail"] = err.Error()
+		log.Error(err)
 		return
 	}
 
@@ -91,16 +98,16 @@ func (s *Worker) DeleteBlock(ResponseWriter http.ResponseWriter, Request *http.R
 	s.ApplyChan <- c
 	err = <-c
 	if err != nil {
-		log.Println(err)
 		rspBody["result"] = "fail"
 		rspBody["detail"] = err.Error()
+		log.Error(err)
 		return
 	}
 
 	if err = s.VG.RemoveLV(lvName); err != nil {
-		log.Println(err)
 		rspBody["result"] = "fail"
 		rspBody["detail"] = err.Error()
+		log.Error(err)
 		return
 	}
 

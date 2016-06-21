@@ -2,9 +2,10 @@ package worker
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 	"strings"
+
+	log "github.com/Sirupsen/logrus"
 )
 
 //target represents block
@@ -25,7 +26,10 @@ func (s *Worker) ListBlock(rsp http.ResponseWriter, req *http.Request) {
 	defer func() {
 		recover()
 		if sendbuf, err := json.Marshal(rspBody); err != nil {
-			log.Println(err)
+			log.WithFields(log.Fields{
+				"reason": err,
+				"data":   rspBody,
+			}).Error("json.Marshal failed.")
 		} else {
 			rsp.Write(sendbuf)
 		}

@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"leewill1120/yager/manager/worker"
-	"log"
 	"net/http"
 	"sort"
 	"strconv"
+
+	log "github.com/Sirupsen/logrus"
 )
 
 func (m *Manager) CreateBlock(rsp http.ResponseWriter, req *http.Request) {
@@ -24,7 +25,7 @@ func (m *Manager) CreateBlock(rsp http.ResponseWriter, req *http.Request) {
 
 	defer func() {
 		if sendbuf, err := json.Marshal(rspBody); err != nil {
-			log.Println(err)
+			log.Error(err)
 		} else {
 			rsp.Write(sendbuf)
 		}
@@ -70,32 +71,46 @@ func (m *Manager) CreateBlock(rsp http.ResponseWriter, req *http.Request) {
 	sort.Sort(availableList)
 
 	for _, w := range availableList.List {
-		if rsp2, err := http.Post("http://"+w.IP+":"+strconv.Itoa(w.Port)+"/block/create", "application/json", bytes.NewBuffer(buf)); err == nil {
+		url := "http://" + w.IP + ":" + strconv.Itoa(w.Port) + "/block/create"
+		if rsp2, err := http.Post(url, "application/json", bytes.NewBuffer(buf)); err == nil {
 			if (rsp2.StatusCode/100 == 4) || (rsp2.StatusCode/100 == 5) {
-				log.Printf("worker return %d.", rsp2.StatusCode)
+				log.WithFields(log.Fields{
+					"host":       w.IP + ":" + strconv.Itoa(w.Port),
+					"url":        url,
+					"StatusCode": rsp2.StatusCode,
+				}).Warn("create block failed.")
 				continue
 			}
 
 			if buf, err = ioutil.ReadAll(rsp2.Body); err != nil {
 				rspBody["detail"] = err.Error()
-				log.Println(err)
+				log.Error(err)
 				continue
 			}
 			if err = json.Unmarshal(buf, &rspBody); err != nil {
 				rspBody["result"] = "fail"
 				rspBody["detail"] = err.Error()
-				log.Println(err, string(buf))
+				log.WithFields(log.Fields{
+					"reason": err,
+					"data":   string(buf),
+				}).Error("json.Unmarshal failed.")
 				continue
 			}
 			if "success" != rspBody["result"].(string) {
-				log.Println(rspBody["detail"])
+				log.WithFields(log.Fields{
+					"reason": rspBody["detail"],
+				}).Warn("create block failed.")
 				continue
 			}
 			//success
 			m.TargetWorkerList[rspBody["target"].(string)] = rspBody["host"].(string)
 			return
 		} else {
-			log.Println(err)
+			log.WithFields(log.Fields{
+				"host":   w.IP + ":" + strconv.Itoa(w.Port),
+				"url":    url,
+				"reason": err,
+			}).Warn("create block failed.")
 			continue
 		}
 	}

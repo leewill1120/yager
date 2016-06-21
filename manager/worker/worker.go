@@ -3,10 +3,11 @@ package worker
 import (
 	"encoding/json"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"strconv"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
 )
 
 type Worker struct {
@@ -21,18 +22,28 @@ type Worker struct {
 
 func (w *Worker) GetCapInfo() {
 	w.InfoValid = false
-	if rsp, err := http.Get("http://" + w.IP + ":" + strconv.Itoa(w.Port) + "/system/info"); err != nil {
-		log.Println(err)
+	url := "http://" + w.IP + ":" + strconv.Itoa(w.Port) + "/system/info"
+	if rsp, err := http.Get(url); err != nil {
+		log.WithFields(log.Fields{
+			"url":    url,
+			"reason": err.Error(),
+		}).Error("get capacity info failed.")
 	} else {
 		if (rsp.StatusCode/100 == 4) || (rsp.StatusCode/100 == 5) {
-			log.Printf("server return %d.", rsp.StatusCode)
+			log.WithFields(log.Fields{
+				"url":        url,
+				"StatusCode": rsp.StatusCode,
+			}).Error("get capacity info failed.")
 		} else {
 			if buf, err := ioutil.ReadAll(rsp.Body); err != nil {
-				log.Println(err)
+				log.Error(err)
 			} else {
 				msg := make(map[string]interface{})
 				if err := json.Unmarshal(buf, &msg); err != nil {
-					log.Println(err, string(buf))
+					log.WithFields(log.Fields{
+						"reason": err,
+						"data":   string(buf),
+					}).Error("json.Unmarshal failed.")
 				} else {
 					if "running" == msg["status"].(string) {
 						w.Free = msg["free"].(float64)
@@ -40,7 +51,10 @@ func (w *Worker) GetCapInfo() {
 						w.Usage = (w.Total - w.Free) / w.Total
 						w.InfoValid = true
 					} else {
-						log.Printf("failed to get cap info, reason:%s\n", msg["detail"])
+						log.WithFields(log.Fields{
+							"url":    url,
+							"reason": msg["detail"],
+						}).Error("get capacity info failed.")
 					}
 				}
 			}

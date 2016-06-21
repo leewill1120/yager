@@ -1,18 +1,15 @@
 package main
 
 import (
-	"log"
 	"os"
 	"strconv"
+
+	log "github.com/Sirupsen/logrus"
 
 	"leewill1120/yager/manager"
 	"leewill1120/yager/plugin"
 	"leewill1120/yager/worker"
 )
-
-func init() {
-	log.SetFlags(log.Lshortfile | log.LstdFlags)
-}
 
 func main() {
 	if len(os.Args) < 2 {
@@ -44,7 +41,9 @@ func startManager(args []string) {
 	registerCode = args[1]
 	m := manager.NewManager(listenPort, registerCode)
 	m.Run(c)
-	log.Println("manager stopped, reason:%s\n", <-c)
+	log.WithFields(log.Fields{
+		"reason": <-c,
+	}).Info("manager stopped.")
 }
 func startWorker(mode string, args []string) {
 	var (
@@ -64,13 +63,17 @@ func startWorker(mode string, args []string) {
 		listenPort, _ = strconv.Atoi(args[0])
 	}
 
-	s := worker.NewWorker(mode, masterIP, masterPort, listenPort, registerCode)
-	if s == nil {
-		log.Fatalf("failed to create %s worker, exit.", mode)
+	w := worker.NewWorker(mode, masterIP, masterPort, listenPort, registerCode)
+	if w == nil {
+		log.WithFields(log.Fields{
+			"mode": mode,
+		}).Fatal("failed to create worker, exit.")
 	} else {
 		c := make(chan error)
-		s.Run(c)
-		log.Printf("server stopped, reason: %s\n", <-c)
+		w.Run(c)
+		log.WithFields(log.Fields{
+			"reason": <-c,
+		}).Info("worker stopped.")
 	}
 }
 

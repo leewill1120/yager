@@ -3,9 +3,10 @@ package worker
 import (
 	"encoding/json"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"strings"
+
+	log "github.com/Sirupsen/logrus"
 
 	"github.com/pborman/uuid"
 )
@@ -17,8 +18,8 @@ func (s *Worker) CreateBlock(ResponseWriter http.ResponseWriter, Request *http.R
 		size                      float64
 		exist, ok                 bool
 		size_interface            interface{}
-		msgBody                   []byte                 = make([]byte, 1024)
-		argsMap                   map[string]interface{} = make(map[string]interface{})
+		buf                       []byte                 = make([]byte, 1024)
+		msgBody                   map[string]interface{} = make(map[string]interface{})
 		rspBody                   map[string]interface{} = make(map[string]interface{})
 		username                  string                 = uuid.New()[24:]
 		password                  string                 = uuid.New()[24:]
@@ -33,28 +34,34 @@ func (s *Worker) CreateBlock(ResponseWriter http.ResponseWriter, Request *http.R
 
 	defer func() {
 		if sendbuf, err := json.Marshal(rspBody); err != nil {
-			log.Println(err)
+			log.WithFields(log.Fields{
+				"reason": err,
+				"data":   rspBody,
+			}).Error("json.Marshal failed.")
 		} else {
 			ResponseWriter.Write(sendbuf)
 		}
 	}()
 
-	msgBody, err = ioutil.ReadAll(Request.Body)
+	buf, err = ioutil.ReadAll(Request.Body)
 	if err != nil {
 		rspBody["result"] = "fail"
 		rspBody["detail"] = "invalid argument."
-		log.Println(err)
+		log.Error(err)
 		return
 	} else {
-		if e := json.Unmarshal(msgBody, &argsMap); e != nil {
+		if e := json.Unmarshal(buf, &msgBody); e != nil {
 			rspBody["result"] = "fail"
 			rspBody["detail"] = "invalid argument."
-			log.Println(e, string(msgBody))
+			log.WithFields(log.Fields{
+				"reason": err,
+				"data":   string(buf),
+			}).Error("json.Unmarshal failed.")
 			return
 		}
 	}
 
-	if initiatorName_i, exist_i := argsMap["InitiatorName"]; !exist_i {
+	if initiatorName_i, exist_i := msgBody["InitiatorName"]; !exist_i {
 		rspBody["result"] = "fail"
 		rspBody["detail"] = "argument InitiatorName not exist."
 		return
@@ -62,7 +69,7 @@ func (s *Worker) CreateBlock(ResponseWriter http.ResponseWriter, Request *http.R
 		initiatorName = initiatorName_i.(string)
 	}
 
-	if size_interface, exist = argsMap["Size"]; !exist {
+	if size_interface, exist = msgBody["Size"]; !exist {
 		rspBody["result"] = "fail"
 		rspBody["detail"] = "argument Size not exist."
 		return
@@ -75,25 +82,25 @@ func (s *Worker) CreateBlock(ResponseWriter http.ResponseWriter, Request *http.R
 	}
 
 	if lv, err = s.VG.CreateLV(size); err != nil {
-		log.Println(err)
 		rspBody["result"] = "fail"
 		rspBody["detail"] = err.Error()
+		log.Error(err)
 		return
 	}
 
 	blockName := "block." + lv
 	if err = s.RtsConf.AddBlockStore("/dev/"+s.VG.Name+"/"+lv, blockName); err != nil {
-		log.Println(err)
 		rspBody["result"] = "fail"
 		rspBody["detail"] = err.Error()
+		log.Error(err)
 		return
 	}
 
 	storage_object := "/backstores/block/" + blockName
 	if target, err = s.RtsConf.AddTarget(storage_object, initiatorName, username, password); err != nil {
-		log.Println(err)
 		rspBody["result"] = "fail"
 		rspBody["detail"] = err.Error()
+		log.Error(err)
 		return
 	}
 
@@ -102,9 +109,9 @@ func (s *Worker) CreateBlock(ResponseWriter http.ResponseWriter, Request *http.R
 	s.ApplyChan <- c
 	err = <-c
 	if err != nil {
-		log.Println(err)
 		rspBody["result"] = "fail"
 		rspBody["detail"] = err.Error()
+		log.Error(err)
 		return
 	}
 

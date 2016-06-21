@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -12,6 +11,8 @@ import (
 	"path"
 	"strings"
 	"syscall"
+
+	log "github.com/Sirupsen/logrus"
 
 	"leewill1120/mux"
 	"leewill1120/yager/plugin/volume"
@@ -32,7 +33,6 @@ type Block struct {
 type Plugin struct {
 	StoreServIP   string
 	StoreServPort int
-	BlockList     map[string]string
 	VolumeList    map[string]*volume.Volume
 	InitiatorName string
 }
@@ -41,6 +41,7 @@ func NewPlugin(storeServIP string, storeServPort int) *Plugin {
 	p := &Plugin{
 		StoreServIP:   storeServIP,
 		StoreServPort: storeServPort,
+		VolumeList:    make(map[string]*volume.Volume),
 	}
 
 	if d, e := ioutil.ReadFile(defaultInitiatorNameFile); e != nil {
@@ -101,12 +102,15 @@ func (p *Plugin) Activate(rsp http.ResponseWriter, req *http.Request) {
 	implements = append(implements, "VolumeDriver")
 	rspBody["Implements"] = implements
 	if buf, err := json.Marshal(rspBody); err != nil {
-		log.Println(err)
+		log.WithFields(log.Fields{
+			"reason": err,
+			"data":   rspBody,
+		}).Error("json.Marshal failed.")
 		rsp.Write([]byte(err.Error()))
 	} else {
 		_, err = rsp.Write(buf)
 		if err != nil {
-			log.Println(err)
+			log.Error(err)
 		}
 	}
 }
@@ -114,25 +118,37 @@ func (p *Plugin) Activate(rsp http.ResponseWriter, req *http.Request) {
 func (p *Plugin) FromDisk() error {
 	home := os.Getenv("HOME")
 	configPath := home + "/.yager.json"
+	if _, err := os.Stat(configPath); err != nil {
+		return p.ToDisk()
+	}
 	if d, e := ioutil.ReadFile(configPath); e != nil {
 		return e
 	} else {
 		if e = json.Unmarshal(d, &p.VolumeList); e != nil {
-			log.Println(e)
+			log.WithFields(log.Fields{
+				"reason": e,
+				"data":   string(d),
+			}).Error("json.Unmarshal failed.")
 			return e
 		}
 	}
 	return nil
 }
 
-func (p *Plugin) ToDisk() {
+func (p *Plugin) ToDisk() error {
 	home := os.Getenv("HOME")
 	configPath := home + "/.yager.json"
 	if b, err := json.Marshal(p.VolumeList); err != nil {
-		log.Println(err)
+		log.WithFields(log.Fields{
+			"reason": err,
+			"data":   p.VolumeList,
+		}).Error("json.Marshal failed.")
+		return err
 	} else {
 		if err = ioutil.WriteFile(configPath, b, 0755); err != nil {
-			log.Println(err)
+			log.Error(err)
+			return err
 		}
 	}
+	return nil
 }

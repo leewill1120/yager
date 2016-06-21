@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
+
+	log "github.com/Sirupsen/logrus"
 )
 
 func (m *Manager) DeleteBlock(rsp http.ResponseWriter, req *http.Request) {
@@ -23,7 +24,10 @@ func (m *Manager) DeleteBlock(rsp http.ResponseWriter, req *http.Request) {
 	rspBody["result"] = "fail"
 	defer func() {
 		if buf, err = json.Marshal(rspBody); err != nil {
-			log.Println(err)
+			log.WithFields(log.Fields{
+				"reason": err,
+				"data":   rspBody,
+			}).Error("json.Marshal failed.")
 		} else {
 			rsp.Write(buf)
 		}
@@ -50,22 +54,31 @@ func (m *Manager) DeleteBlock(rsp http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	worker := m.WorkerList[m.TargetWorkerList[targetName]]
-	if rsp2, err := http.Post("http://"+worker.IP+":"+strconv.Itoa(worker.Port)+"/block/delete", "application/json", bytes.NewBuffer(buf)); err == nil {
+	w := m.WorkerList[m.TargetWorkerList[targetName]]
+	url := "http://" + w.IP + ":" + strconv.Itoa(w.Port) + "/block/delete"
+	if rsp2, err := http.Post(url, "application/json", bytes.NewBuffer(buf)); err == nil {
 		if 4 == rsp2.StatusCode/100 || 5 == rsp2.StatusCode {
 			rspBody["detail"] = fmt.Sprintln("Worker return %d", rsp2.StatusCode)
+			log.WithFields(log.Fields{
+				"host":       w.IP + ":" + strconv.Itoa(w.Port),
+				"url":        url,
+				"StatusCode": rsp2.StatusCode,
+			}).Warn("delete block failed.")
 			return
 		}
 		if buf, err = ioutil.ReadAll(rsp2.Body); err != nil {
 			rspBody["detail"] = err.Error()
-			log.Println(err)
+			log.Error(err)
 			return
 		}
 
 		if err = json.Unmarshal(buf, &rspBody); err != nil {
 			rspBody["result"] = "fail"
 			rspBody["detail"] = err.Error()
-			log.Println(err, string(buf))
+			log.WithFields(log.Fields{
+				"reason": err,
+				"data":   string(buf),
+			}).Error("json.Unmarshal failed.")
 			return
 		}
 
@@ -75,6 +88,11 @@ func (m *Manager) DeleteBlock(rsp http.ResponseWriter, req *http.Request) {
 
 	} else {
 		rspBody["detail"] = err.Error()
+		log.WithFields(log.Fields{
+			"host":   w.IP + ":" + strconv.Itoa(w.Port),
+			"url":    url,
+			"reason": err,
+		}).Warn("delete block failed.")
 		return
 	}
 }

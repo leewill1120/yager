@@ -3,9 +3,10 @@ package manager
 import (
 	"leewill1120/mux"
 	"leewill1120/yager/manager/worker"
-	"log"
 	"net/http"
 	"strconv"
+
+	log "github.com/Sirupsen/logrus"
 )
 
 type Target struct {
@@ -45,7 +46,7 @@ func (m *Manager) Run(c chan interface{}) {
 		Handler: router,
 	}
 	go func() {
-		log.Printf("manager listening on:" + apiServer.Addr)
+		log.Infof("manager listening on %s.", apiServer.Addr)
 		c <- apiServer.ListenAndServe()
 	}()
 }
