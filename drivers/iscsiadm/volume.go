@@ -1,4 +1,4 @@
-package volume
+package iscsiadm
 
 import (
 	"bytes"
@@ -12,18 +12,13 @@ import (
 	"strings"
 	"time"
 
+	"leewill1120/yager/drivers/volume"
+
 	log "github.com/Sirupsen/logrus"
 )
 
-const (
-	INIT = iota
-	OK
-	BAD
-)
-
 type Volume struct {
-	Name          string
-	MountPoint    string
+	volume.CommonVolume
 	Dev           string
 	Target        string
 	StoreServIP   string
@@ -31,17 +26,18 @@ type Volume struct {
 	UserID        string
 	Password      string
 	Size          float64
-	Status        int
-	Type          string //iscsi nfs cifs
 }
 
-func NewVolume(volumeName string, size float64, volumetype string) *Volume {
-	return &Volume{
-		Name:   volumeName,
-		Size:   size,
-		Status: INIT,
-		Type:   volumetype,
-	}
+func NewVolume(rspBody map[string]interface{}) (*Volume, error) {
+	return &Volume{}, nil
+}
+
+func (v *Volume) Attribute() map[string]interface{} {
+	return nil
+}
+
+func (v *Volume) Mount() error {
+	return nil
 }
 
 func (v *Volume) GetBackendStore(storeMServIP string, storeMServPort int, initiatorName string) error {
@@ -88,6 +84,7 @@ func (v *Volume) GetBackendStore(storeMServIP string, storeMServPort int, initia
 	return nil
 }
 
+/*
 func (v *Volume) ReleaseBackendStore(storeMServIP string, storeMServPort int) error {
 	var (
 		err     error
@@ -122,7 +119,7 @@ func (v *Volume) ReleaseBackendStore(storeMServIP string, storeMServPort int) er
 	v.Status = BAD
 	return nil
 }
-
+*/
 func (v *Volume) Umount() error {
 	mountPoint := "/mnt/yager/" + v.Name
 	cmd := exec.Command("umount", mountPoint)

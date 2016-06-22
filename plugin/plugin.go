@@ -12,6 +12,8 @@ import (
 	"strings"
 	"syscall"
 
+	"leewill1120/yager/drivers/volume"
+
 	log "github.com/Sirupsen/logrus"
 
 	"leewill1120/mux"
@@ -30,17 +32,17 @@ type Block struct {
 }
 
 type Plugin struct {
-	StoreServIP   string
-	StoreServPort int
-	VolumeList    map[string]*Volume
-	InitiatorName string
+	StoreMServIP   string
+	StoreMServPort int
+	VolumeList     map[string]*volume.Volume
+	InitiatorName  string
 }
 
-func NewPlugin(storeServIP string, storeServPort int) *Plugin {
+func NewPlugin(storeMServIP string, storeMServPort int) *Plugin {
 	p := &Plugin{
-		StoreServIP:   storeServIP,
-		StoreServPort: storeServPort,
-		VolumeList:    make(map[string]*Volume),
+		StoreMServIP:   storeMServIP,
+		StoreMServPort: storeMServPort,
+		VolumeList:     make(map[string]*volume.Volume),
 	}
 
 	if d, e := ioutil.ReadFile(defaultInitiatorNameFile); e != nil {
@@ -65,7 +67,7 @@ func (p *Plugin) Run() {
 	router.HandleFunc("/VolumeDriver.Create", p.CreateVolume).Methods("POST")
 	router.HandleFunc("/VolumeDriver.Remove", p.RemoveVolume).Methods("POST")
 	router.HandleFunc("/VolumeDriver.Mount", p.MountVolume).Methods("POST")
-	router.HandleFunc("/VolumeDriver.Unmount", p.UnmountVolume).Methods("POST")
+	router.HandleFunc("/VolumeDriver.Unmount", p.UmountVolume).Methods("POST")
 	router.HandleFunc("/VolumeDriver.Path", p.VolumePath).Methods("POST")
 	router.HandleFunc("/VolumeDriver.Get", p.GetVolume).Methods("POST")
 	router.HandleFunc("/VolumeDriver.List", p.ListVolumes).Methods("POST")
