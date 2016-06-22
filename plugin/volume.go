@@ -46,12 +46,12 @@ func (p *Plugin) CreateVolume(rsp http.ResponseWriter, req *http.Request) {
 	}()
 
 	if buf, err = ioutil.ReadAll(req.Body); err != nil {
-		rspBody["Err"] = err
+		rspBody["Err"] = err.Error()
 		return
 	}
 
 	if err = json.Unmarshal(buf, &reqBody); err != nil {
-		rspBody["Err"] = err
+		rspBody["Err"] = err.Error()
 		return
 	}
 
@@ -72,15 +72,15 @@ func (p *Plugin) CreateVolume(rsp http.ResponseWriter, req *http.Request) {
 				size = defaultVolumeSize
 			} else {
 				if size, err = strconv.ParseFloat(opts["size"].(string), 64); err != nil {
-					rspBody["Err"] = err
+					rspBody["Err"] = err.Error()
 				}
 			}
 		}
 	}
 
-	vol, err = p.requestVolume("", size)
+	vol, err = p.requestVolume(name, "", size)
 	if err != nil {
-		rspBody["Err"] = err
+		rspBody["Err"] = err.Error()
 		return
 	}
 
@@ -89,7 +89,49 @@ func (p *Plugin) CreateVolume(rsp http.ResponseWriter, req *http.Request) {
 	rspBody["Err"] = ""
 }
 
-func (p *Plugin) requestVolume(volumeType string, size float64) (*volume.Volume, error) {
+func (p *Plugin) releaseVolume(v *volume.Volume) error {
+	var (
+		err     error
+		buf     []byte = make([]byte, 1024)
+		method  reflect.Value
+		reqBody map[string]interface{} = make(map[string]interface{})
+		rspBody map[string]interface{} = make(map[string]interface{})
+		url     string                 = "http://" + p.StoreMServIP + ":" + strconv.Itoa(p.StoreMServPort) + "/block/delete"
+		rsp     *http.Response
+	)
+
+	method = reflect.ValueOf(*v).MethodByName("Attribute")
+	if !method.IsValid() {
+		return fmt.Errorf("method(Attribute) invalid.")
+	}
+	fn := method.Interface().(func() map[string]interface{})
+	attributes := fn()
+
+	reqBody["target"] = attributes["Target"]
+	if buf, err = json.Marshal(reqBody); err != nil {
+		return err
+	}
+	if rsp, err = http.Post(url, "application/json", bytes.NewBuffer(buf)); err != nil {
+		return err
+	}
+	if 4 == rsp.StatusCode/100 || 5 == rsp.StatusCode/100 {
+		return fmt.Errorf("server return %d.\n", rsp.StatusCode)
+	}
+	if buf, err = ioutil.ReadAll(rsp.Body); err != nil {
+		return err
+	}
+
+	if err = json.Unmarshal(buf, &rspBody); err != nil {
+		return err
+	}
+
+	if "success" != rspBody["result"].(string) {
+		return fmt.Errorf("releaseVolume failed.reason:%s\n", rspBody["detail"])
+	}
+	return nil
+}
+
+func (p *Plugin) requestVolume(volumeName, volumeType string, size float64) (*volume.Volume, error) {
 	var (
 		err     error
 		buf     []byte                 = make([]byte, 1024)
@@ -117,6 +159,9 @@ func (p *Plugin) requestVolume(volumeType string, size float64) (*volume.Volume,
 	}
 
 	if err = json.Unmarshal(buf, &rspBody); err != nil {
+		log.WithFields(log.Fields{
+			"data": string(buf),
+		}).Debug(err)
 		return nil, err
 	}
 
@@ -125,7 +170,10 @@ func (p *Plugin) requestVolume(volumeType string, size float64) (*volume.Volume,
 	}
 	switch rspBody["type"].(string) {
 	case "iscsi":
-		if vol, err = iscsiadm.NewVolume(rspBody); nil != err {
+		if vol, err = iscsiadm.NewVolume(volumeName, rspBody); nil != err {
+			log.WithFields(log.Fields{
+				"reason": err,
+			}).Debug("request volume faild.")
 			return nil, err
 		}
 	case "nfs":
@@ -159,16 +207,16 @@ func (p *Plugin) ListVolumes(rsp http.ResponseWriter, req *http.Request) {
 
 	volumeList := make([]interface{}, 0)
 	for _, vl := range p.VolumeList {
-		method := reflect.ValueOf(vl).MethodByName("Attribute")
+		method := reflect.ValueOf(*vl).MethodByName("Attribute")
 		if !method.IsValid() {
-			log.Fatal("method invalid.")
+			log.Fatal("method(Attribute) invalid.")
 		}
 		fn := method.Interface().(func() map[string]interface{})
 		attributes := fn()
 
 		vm := make(map[string]string)
 		vm["Name"] = attributes["Name"].(string)
-		vm["Mountpoint"] = attributes["Mountpoint"].(string)
+		vm["MountPoint"] = attributes["MountPoint"].(string)
 		vm["Type"] = attributes["Type"].(string)
 		volumeList = append(volumeList, vm)
 	}
@@ -219,25 +267,25 @@ func (p *Plugin) MountVolume(rsp http.ResponseWriter, req *http.Request) {
 
 	vl := p.VolumeList[name]
 
-	method = reflect.ValueOf(vl).MethodByName("Mount")
+	method = reflect.ValueOf(*vl).MethodByName("Mount")
 	if !method.IsValid() {
 		rspBody["Err"] = "method(Mount) invalid."
 		return
 	}
 	fnMount := method.Interface().(func() error)
 	if err = fnMount(); err != nil {
-		rspBody["Err"] = err
+		rspBody["Err"] = err.Error()
 		return
 	}
 
-	method = reflect.ValueOf(vl).MethodByName("Attribute")
+	method = reflect.ValueOf(*vl).MethodByName("Attribute")
 	if !method.IsValid() {
-		log.Fatal("method invalid.")
+		log.Fatal("method(Attribute) invalid.")
 	}
 	fnAttribute := method.Interface().(func() map[string]interface{})
 	attributes := fnAttribute()
 
-	rspBody["Mountpoint"] = attributes["Mountpoint"].(string)
+	rspBody["MountPoint"] = attributes["MountPoint"].(string)
 	rspBody["Err"] = ""
 }
 
@@ -281,7 +329,7 @@ func (p *Plugin) UmountVolume(rsp http.ResponseWriter, req *http.Request) {
 	}
 
 	vl := p.VolumeList[name]
-	method := reflect.ValueOf(vl).MethodByName("Umount")
+	method := reflect.ValueOf(*vl).MethodByName("Umount")
 	if !method.IsValid() {
 		rspBody["Err"] = "method(Umount) invalid."
 		return
@@ -289,7 +337,7 @@ func (p *Plugin) UmountVolume(rsp http.ResponseWriter, req *http.Request) {
 	fn := method.Interface().(func() error)
 
 	if err = fn(); err != nil {
-		rspBody["Err"] = err
+		rspBody["Err"] = err.Error()
 		return
 	}
 	rspBody["Err"] = ""
@@ -319,18 +367,18 @@ func (p *Plugin) RemoveVolume(rsp http.ResponseWriter, req *http.Request) {
 	}()
 
 	if buf, err = ioutil.ReadAll(req.Body); err != nil {
-		rspBody["Err"] = err
+		rspBody["Err"] = err.Error()
 		return
 	}
 
 	if err = json.Unmarshal(buf, &reqBody); err != nil {
-		rspBody["Err"] = err
+		rspBody["Err"] = err.Error()
 		return
 	}
 
 	name := strings.TrimSpace(reqBody["Name"].(string))
 	vl := p.VolumeList[name]
-	method = reflect.ValueOf(vl).MethodByName("Attribute")
+	method = reflect.ValueOf(*vl).MethodByName("Attribute")
 	if !method.IsValid() {
 		rspBody["Err"] = "method(Attribute) invalid."
 		return
@@ -340,6 +388,11 @@ func (p *Plugin) RemoveVolume(rsp http.ResponseWriter, req *http.Request) {
 
 	if volume.MOUNTED == attributes["Status"].(int) {
 		rspBody["Err"] = "volume is still mounted, couldn't remove."
+		return
+	}
+
+	if err = p.releaseVolume(vl); err != nil {
+		rspBody["Err"] = err.Error()
 		return
 	}
 
@@ -387,14 +440,14 @@ func (p *Plugin) VolumePath(rsp http.ResponseWriter, req *http.Request) {
 		return
 	}
 	vl := p.VolumeList[name]
-	method := reflect.ValueOf(vl).MethodByName("Attribute")
+	method := reflect.ValueOf(*vl).MethodByName("Attribute")
 	if !method.IsValid() {
-		log.Fatal("method invalid.")
+		log.Fatal("method(Attribute) invalid.")
 	}
 	fn := method.Interface().(func() map[string]interface{})
 	attributes := fn()
 
-	rspBody["Mountpoint"] = attributes["Mountpoint"].(string)
+	rspBody["MountPoint"] = attributes["MountPoint"].(string)
 	rspBody["Err"] = ""
 }
 
@@ -437,16 +490,16 @@ func (p *Plugin) GetVolume(rsp http.ResponseWriter, req *http.Request) {
 		return
 	}
 	vl := p.VolumeList[name]
-	method := reflect.ValueOf(vl).MethodByName("Attribute")
+	method := reflect.ValueOf(*vl).MethodByName("Attribute")
 	if !method.IsValid() {
-		log.Fatal("method invalid.")
+		log.Fatal("method(Attribute) invalid.")
 	}
 	fn := method.Interface().(func() map[string]interface{})
 	attributes := fn()
 
 	vlm := make(map[string]string)
 	vlm["Name"] = attributes["Name"].(string)
-	vlm["Mountpoint"] = attributes["Mountpoint"].(string)
+	vlm["MountPoint"] = attributes["MountPoint"].(string)
 	rspBody["Volume"] = vlm
 	rspBody["Err"] = ""
 }

@@ -116,7 +116,9 @@ func (s *Worker) CreateBlock(ResponseWriter http.ResponseWriter, Request *http.R
 	}
 
 	rspBody["result"] = "success"
+	rspBody["type"] = "iscsi"
 	rspBody["target"] = target
+	rspBody["size"] = size
 	rspBody["userid"] = username
 	rspBody["password"] = password
 	rspBody["host"] = strings.Split(Request.Host, ":")[0]

@@ -11,6 +11,9 @@ import (
 	"leewill1120/yager/worker"
 )
 
+func init() {
+	log.SetLevel(log.DebugLevel)
+}
 func main() {
 	if len(os.Args) < 2 {
 		log.Fatal("no enough arguments.")
