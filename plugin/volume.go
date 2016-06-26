@@ -17,18 +17,20 @@ import (
 )
 
 var (
-	defaultVolumeSize float64 = 1024 * 10
+	defaultVolumeSize float64           = 1024 * 10
+	supportType       map[string]string = map[string]string{"iscsi": "", "nfs": "", "cifs": ""}
 )
 
 func (p *Plugin) CreateVolume(rsp http.ResponseWriter, req *http.Request) {
 	var (
-		err     error
-		buf     []byte                 = make([]byte, 1024)
-		reqBody map[string]interface{} = make(map[string]interface{})
-		rspBody map[string]interface{} = make(map[string]interface{})
-		size    float64
-		ok      bool
-		vol     *volume.Volume
+		err        error
+		buf        []byte                 = make([]byte, 1024)
+		reqBody    map[string]interface{} = make(map[string]interface{})
+		rspBody    map[string]interface{} = make(map[string]interface{})
+		size       float64
+		ok         bool
+		vol        *volume.Volume
+		volumeType string
 	)
 
 	defer func() {
@@ -67,18 +69,29 @@ func (p *Plugin) CreateVolume(rsp http.ResponseWriter, req *http.Request) {
 		if nil == opts_interface {
 			size = defaultVolumeSize
 		} else {
+			//get options
 			opts := opts_interface.(map[string]interface{})
 			if _, ok = opts["size"]; !ok {
 				size = defaultVolumeSize
 			} else {
 				if size, err = strconv.ParseFloat(opts["size"].(string), 64); err != nil {
 					rspBody["Err"] = err.Error()
+					return
 				}
 			}
+
+			if _, ok = opts["type"]; ok {
+				volumeType = strings.TrimSpace(opts["type"].(string))
+				if _, ok = supportType[volumeType]; !ok {
+					rspBody["Err"] = fmt.Errorf("not supported type(%s)", volumeType)
+					return
+				}
+			}
+
 		}
 	}
 
-	vol, err = p.requestVolume(name, "", size)
+	vol, err = p.requestVolume(name, volumeType, size)
 	if err != nil {
 		rspBody["Err"] = err.Error()
 		return
