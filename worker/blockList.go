@@ -36,7 +36,7 @@ func (s *Worker) ListBlock(rsp http.ResponseWriter, req *http.Request) {
 	}()
 
 	targetList := make([]interface{}, 0)
-	for _, t := range s.RtsConf.Targets {
+	for _, t := range s.ISCSIServer.RtsConf.Targets {
 		tt := make(map[string]interface{})
 		tt["target"] = t.Wwn
 		tt["host"] = strings.Split(req.Host, ":")[0]

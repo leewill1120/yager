@@ -3,6 +3,7 @@ package worker
 import (
 	"leewill1120/mux"
 	"leewill1120/yager/drivers/lvm"
+	"leewill1120/yager/drivers/nfs"
 	"leewill1120/yager/drivers/rtslib"
 	"net/http"
 	"strconv"
@@ -12,8 +13,8 @@ import (
 )
 
 type Worker struct {
-	VG           *lvm.VolumeGroup
-	RtsConf      *rtslib.Config
+	ISCSIServer  *Iscsi
+	NFSServer    *nfs.Server
 	ApplyChan    chan chan error
 	ListenPort   int
 	MasterIP     string
@@ -22,10 +23,35 @@ type Worker struct {
 	RegisterCode string
 }
 
-func NewWorker(workmode, masterip string, masterport, listenport int, registercode string) *Worker {
+type Iscsi struct {
+	VG      *lvm.VolumeGroup
+	RtsConf *rtslib.Config
+}
+
+func NewWorker(workmode, masterip string, masterport, listenport int, registercode string, protoList map[string]bool) *Worker {
+	var (
+		ok          bool
+		iscsiServer *Iscsi      = nil
+		nfsServer   *nfs.Server = nil
+	)
+
+	if _, ok = protoList["iscsi"]; ok {
+		iscsiServer = &Iscsi{
+			VG:      lvm.NewVG(""),
+			RtsConf: rtslib.NewConfig(),
+		}
+		if nil == iscsiServer.RtsConf || nil == iscsiServer.VG {
+			return nil
+		}
+	}
+
+	if _, ok = protoList["nfs"]; ok {
+		nfsServer = nfs.NewServer("")
+	}
+
 	s := &Worker{
-		VG:           lvm.NewVG(""),
-		RtsConf:      rtslib.NewConfig(),
+		ISCSIServer:  iscsiServer,
+		NFSServer:    nfsServer,
 		ListenPort:   listenport,
 		MasterIP:     masterip,
 		MasterPort:   masterport,
@@ -33,11 +59,8 @@ func NewWorker(workmode, masterip string, masterport, listenport int, registerco
 		RegisterCode: registercode,
 		ApplyChan:    make(chan chan error),
 	}
-	if s.RtsConf == nil || s.VG == nil {
-		return nil
-	} else {
-		return s
-	}
+
+	return s
 }
 
 func (s *Worker) checkClientIP(clientIP string) bool {
@@ -53,12 +76,12 @@ func (s *Worker) Run(c chan error) {
 		for {
 			c := <-s.ApplyChan
 
-			if err := s.RtsConf.ToDisk(""); err != nil {
+			if err := s.ISCSIServer.RtsConf.ToDisk(""); err != nil {
 				c <- err
 				return
 			}
 
-			if err := s.RtsConf.Restore(""); err != nil {
+			if err := s.ISCSIServer.RtsConf.Restore(""); err != nil {
 				c <- err
 				return
 			}

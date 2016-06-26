@@ -36,6 +36,6 @@ func (s *Worker) SystemInfo(rsp http.ResponseWriter, req *http.Request) {
 	}()
 
 	rspBody["status"] = "running"
-	rspBody["total"] = s.VG.Size
-	rspBody["free"] = s.VG.Free
+	rspBody["total"] = s.ISCSIServer.VG.Size
+	rspBody["free"] = s.ISCSIServer.VG.Free
 }

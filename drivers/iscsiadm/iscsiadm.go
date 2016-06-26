@@ -134,7 +134,7 @@ func (v *Volume) formatAndMount() error {
 		v.Formatted = true
 	}
 
-	mountPoint := "/mnt/yager/" + v.Name
+	mountPoint := "/mnt/yager/iscsi/" + v.Name
 	if err := os.MkdirAll(mountPoint, os.ModeDir); err != nil {
 		return err
 	}

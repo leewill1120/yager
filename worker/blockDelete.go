@@ -62,7 +62,7 @@ func (s *Worker) DeleteBlock(ResponseWriter http.ResponseWriter, Request *http.R
 		target = target_i.(string)
 	}
 
-	t := s.RtsConf.GetTarget(target)
+	t := s.ISCSIServer.RtsConf.GetTarget(target)
 	if nil == t {
 		rspBody["result"] = "fail"
 		rspBody["detail"] = "target not exist."
@@ -70,7 +70,7 @@ func (s *Worker) DeleteBlock(ResponseWriter http.ResponseWriter, Request *http.R
 	}
 	soPath := t.Tpgs[0].Luns[0].Storage_object
 	soName := strings.Split(soPath, "/")[len(strings.Split(soPath, "/"))-1]
-	so := s.RtsConf.GetStore(soName)
+	so := s.ISCSIServer.RtsConf.GetStore(soName)
 	if nil == so {
 		rspBody["result"] = "fail"
 		rspBody["detail"] = "Storage_object not exist."
@@ -79,14 +79,14 @@ func (s *Worker) DeleteBlock(ResponseWriter http.ResponseWriter, Request *http.R
 	lvPath := so.Dev
 	lvName := strings.Split(lvPath, "/")[len(strings.Split(lvPath, "/"))-1]
 
-	if err = s.RtsConf.RemoveTarget(target); err != nil {
+	if err = s.ISCSIServer.RtsConf.RemoveTarget(target); err != nil {
 		rspBody["result"] = "fail"
 		rspBody["detail"] = err.Error()
 		log.Error(err)
 		return
 	}
 
-	if err = s.RtsConf.RemoveStore(soName); err != nil {
+	if err = s.ISCSIServer.RtsConf.RemoveStore(soName); err != nil {
 		rspBody["result"] = "fail"
 		rspBody["detail"] = err.Error()
 		log.Error(err)
@@ -104,7 +104,7 @@ func (s *Worker) DeleteBlock(ResponseWriter http.ResponseWriter, Request *http.R
 		return
 	}
 
-	if err = s.VG.RemoveLV(lvName); err != nil {
+	if err = s.ISCSIServer.VG.RemoveLV(lvName); err != nil {
 		rspBody["result"] = "fail"
 		rspBody["detail"] = err.Error()
 		log.Error(err)

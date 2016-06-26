@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"leewill1120/yager/drivers/iscsiadm"
+	"leewill1120/yager/drivers/nfs"
 	"leewill1120/yager/drivers/volume"
 
 	log "github.com/Sirupsen/logrus"
@@ -156,8 +157,11 @@ func (p *Plugin) requestVolume(volumeName, volumeType string, size float64) (*vo
 	)
 
 	reqBody["type"] = volumeType
-	reqBody["initiatorName"] = p.InitiatorName
-	reqBody["size"] = size
+	if "iscsi" == volumeType || "" == volumeType {
+		reqBody["initiatorName"] = p.InitiatorName
+		reqBody["size"] = size
+	}
+
 	if buf, err = json.Marshal(reqBody); err != nil {
 		return nil, err
 	}
@@ -190,7 +194,21 @@ func (p *Plugin) requestVolume(volumeName, volumeType string, size float64) (*vo
 			return nil, err
 		}
 	case "nfs":
+		if vol, err = nfs.NewVolume(volumeName, rspBody); nil != err {
+			log.WithFields(log.Fields{
+				"reason": err,
+			}).Debug("request volume faild.")
+			return nil, err
+		}
 	case "cifs":
+		/*
+			if vol, err = cifs.NewVolume(volumeName, rspBody); nil != err {
+				log.WithFields(log.Fields{
+					"reason": err,
+				}).Debug("request volume faild.")
+				return nil, err
+			}
+		*/
 	default:
 		return nil, fmt.Errorf("volume type(%s) not support", rspBody["type"].(string))
 	}

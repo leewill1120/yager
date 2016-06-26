@@ -2,6 +2,7 @@ package worker
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -23,6 +24,7 @@ func (s *Worker) CreateBlock(ResponseWriter http.ResponseWriter, Request *http.R
 		rspBody                   map[string]interface{} = make(map[string]interface{})
 		username                  string                 = uuid.New()[24:]
 		password                  string                 = uuid.New()[24:]
+		volumeType                string
 	)
 	if "slave" == s.WorkMode {
 		cliIP := strings.Split(Request.RemoteAddr, ":")[0]
@@ -61,69 +63,105 @@ func (s *Worker) CreateBlock(ResponseWriter http.ResponseWriter, Request *http.R
 		}
 	}
 
-	if initiatorName_i, exist_i := msgBody["initiatorName"]; !exist_i {
+	if volumeType_i, exist_i := msgBody["type"]; !exist_i {
 		rspBody["result"] = "fail"
-		rspBody["detail"] = "argument initiatorName not exist."
+		rspBody["detail"] = "field type not exist."
 		return
 	} else {
-		initiatorName = initiatorName_i.(string)
+		volumeType = volumeType_i.(string)
 	}
 
-	if size_interface, exist = msgBody["size"]; !exist {
+	switch volumeType {
+	case "iscsi":
+		//s.createISCSIVolume(msgBody, &rspBody)
+	case "nfs":
+		//s.createNFSVolume()
+	default:
 		rspBody["result"] = "fail"
-		rspBody["detail"] = "argument size not exist."
+		rspBody["detail"] = fmt.Sprintf("volume type(%s) not supported.", volumeType)
 		return
-	} else {
-		if size, ok = size_interface.(float64); !ok {
-			rspBody["result"] = "fail"
-			rspBody["detail"] = "error to parse size."
-			return
-		}
-	}
-
-	if lv, err = s.VG.CreateLV(size); err != nil {
-		rspBody["result"] = "fail"
-		rspBody["detail"] = err.Error()
-		log.Error(err)
-		return
-	}
-
-	blockName := "block." + lv
-	if err = s.RtsConf.AddBlockStore("/dev/"+s.VG.Name+"/"+lv, blockName); err != nil {
-		rspBody["result"] = "fail"
-		rspBody["detail"] = err.Error()
-		log.Error(err)
-		return
-	}
-
-	storage_object := "/backstores/block/" + blockName
-	if target, err = s.RtsConf.AddTarget(storage_object, initiatorName, username, password); err != nil {
-		rspBody["result"] = "fail"
-		rspBody["detail"] = err.Error()
-		log.Error(err)
-		return
-	}
-
-	//notify to apply setting
-	c := make(chan error)
-	s.ApplyChan <- c
-	err = <-c
-	if err != nil {
-		rspBody["result"] = "fail"
-		rspBody["detail"] = err.Error()
-		log.Error(err)
-		return
-	}
-
-	rspBody["result"] = "success"
-	rspBody["type"] = "iscsi"
-	rspBody["target"] = target
-	rspBody["size"] = size
-	rspBody["userid"] = username
-	rspBody["password"] = password
-	rspBody["host"] = strings.Split(Request.Host, ":")[0]
-	rspBody["port"] = -1
-	if stTarget := s.RtsConf.GetTarget(target); stTarget != nil {
-		rspBody["port"] = stTarget.Tpgs[0].Portals[0].Port
 	}
 }
+
+/*
+	var (
+		err                       error
+		initiatorName, lv, target string
+		size                      float64
+		exist, ok                 bool
+		size_interface            interface{}
+		buf                       []byte                 = make([]byte, 1024)
+		username                  string                 = uuid.New()[24:]
+		password                  string                 = uuid.New()[24:]
+		volumeType                string
+	)
+
+			if initiatorName_i, exist_i := msgBody["initiatorName"]; !exist_i {
+			rspBody["result"] = "fail"
+			rspBody["detail"] = "field initiatorName not exist."
+			return
+		} else {
+			initiatorName = initiatorName_i.(string)
+		}
+
+		if size_interface, exist = msgBody["size"]; !exist {
+			rspBody["result"] = "fail"
+			rspBody["detail"] = "argument size not exist."
+			return
+		} else {
+			if size, ok = size_interface.(float64); !ok {
+				rspBody["result"] = "fail"
+				rspBody["detail"] = "error to parse size."
+				return
+			}
+		}
+
+		if lv, err = s.ISCSIServer.VG.CreateLV(size); err != nil {
+			rspBody["result"] = "fail"
+			rspBody["detail"] = err.Error()
+			log.Error(err)
+			return
+		}
+
+		blockName := "block." + lv
+		if err = s.ISCSIServer.RtsConf.AddBlockStore("/dev/"+s.ISCSIServer.VG.Name+"/"+lv, blockName); err != nil {
+			rspBody["result"] = "fail"
+			rspBody["detail"] = err.Error()
+			log.Error(err)
+			return
+		}
+
+		storage_object := "/backstores/block/" + blockName
+		if target, err = s.ISCSIServer.RtsConf.AddTarget(storage_object, initiatorName, username, password); err != nil {
+			rspBody["result"] = "fail"
+			rspBody["detail"] = err.Error()
+			log.Error(err)
+			return
+		}
+
+		//notify to apply setting
+		c := make(chan error)
+		s.ApplyChan <- c
+		err = <-c
+		if err != nil {
+			rspBody["result"] = "fail"
+			rspBody["detail"] = err.Error()
+			log.Error(err)
+			return
+		}
+
+		rspBody["result"] = "success"
+		rspBody["type"] = "iscsi"
+		rspBody["target"] = target
+		rspBody["size"] = size
+		rspBody["userid"] = username
+		rspBody["password"] = password
+		rspBody["host"] = strings.Split(Request.Host, ":")[0]
+		rspBody["port"] = -1
+		if stTarget := s.ISCSIServer.RtsConf.GetTarget(target); stTarget != nil {
+			rspBody["port"] = stTarget.Tpgs[0].Portals[0].Port
+		}
+	}
+}
+
+*/
